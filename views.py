@@ -1,49 +1,54 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth import login
+
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .forms import RegisterForm, UserUpdateForm, ProfileUpdateForm
-from .models import Profile
+from .models import Item
+from .forms import ItemForm
 
 
-def register_view(request):
+@login_required
+def item_list(request):
+    items = Item.objects.filter(owner=request.user)
+    return render(request, 'read.html', {'items': items})
+
+
+@login_required
+def item_create(request):
     if request.method == 'POST':
-        form = RegisterForm(request.POST)
+        form = ItemForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            login(request, user)
-            messages.success(request, 'Account created successfully.')
-            return redirect('profile')
+            item = form.save(commit=False)
+            item.owner = request.user
+            item.save()
+            messages.success(request, 'Item created successfully.')
+            return redirect('item_list')
     else:
-        form = RegisterForm()
+        form = ItemForm()
 
-    return render(request, 'register.html', {'form': form})
-
-
-@login_required
-def profile_view(request):
-    profile, _ = Profile.objects.get_or_create(user=request.user)
-    return render(request, 'profile.html', {'profile': profile})
+    return render(request, 'create_update.html', {'form': form, 'action': 'Create'})
 
 
 @login_required
-def edit_profile_view(request):
-    profile, _ = Profile.objects.get_or_create(user=request.user)
+def item_update(request, pk):
+    item = get_object_or_404(Item, pk=pk, owner=request.user)
 
     if request.method == 'POST':
-        user_form = UserUpdateForm(request.POST, instance=request.user)
-        profile_form = ProfileUpdateForm(request.POST, request.FILES, instance=profile)
-
-        if user_form.is_valid() and profile_form.is_valid():
-            user_form.save()
-            profile_form.save()
-            messages.success(request, 'Profile updated successfully.')
-            return redirect('profile')
+        form = ItemForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Item updated successfully.')
+            return redirect('item_list')
     else:
-        user_form = UserUpdateForm(instance=request.user)
-        profile_form = ProfileUpdateForm(instance=profile)
+        form = ItemForm(instance=item)
 
-    return render(request, 'edit_profile.html', {
-        'user_form': user_form,
-        'profile_form': profile_form,
-    })
+    return render(request, 'create_update.html', {'form': form, 'action': 'Update'})
+
+
+@login_required
+def item_delete(request, pk):
+    item = get_object_or_404(Item, pk=pk, owner=request.user)
+    if request.method == 'POST':
+        item.delete()
+        messages.success(request, 'Item deleted successfully.')
+        return redirect('item_list')
+    return redirect('item_list')
